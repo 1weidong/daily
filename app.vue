@@ -15,7 +15,7 @@
                 </li>
             </ul>
         </div>
-        <div class="daily-list">
+        <div class="daily-list" ref="list">
             <template v-if="type === 'recommend'">
                 <div v-for="list in recommendList">
                     <div class="daily-date">{{ formatDay(list.date) }}</div>
@@ -33,14 +33,16 @@
                 </Item>
             </template>
         </div>
-        <!--<daily-ariticle></daily-ariticle>-->
+        <Item @click.native="handleClick(item.id)"></Item>
+        <daily-ariticle :id="articleId"></daily-ariticle>
     </div>
 </template>
 <script>
     import $ from './libs/util';
     import Item from './components/item.vue';
+    import dailyAriticle from './components/daily-ariticle.vue';
     export default {
-        components: { Item },
+        components: { Item, dailyAriticle},
         data () {
             return {
                 themes: [],
@@ -48,11 +50,16 @@
                 list: [],
                 dailyTime: $.getTodayTime(),
                 showThemes: false,
+                isLoading: false,
                 type: 'recommend',
-                themeId: 0
+                themeId: 0,
+                articleId: 0
             }
         },
         methods: {
+            handleClick () {
+              this.articleId = id;
+            },
             getThemes () {
                 //ajax发起get请求
                 $.ajax.get('themes').then(res => {
@@ -86,21 +93,41 @@
                     this.isLoading = false;
                 })
             },
-            methods: {
-                //转换为带汉字的月日
-                formatDay (date) {
-                    let month = date.substr(4, 2);
-                    let day = date.substr(6, 2);
-                    if (month.substr(0, 1) === '0') month = month.substr(1, 1);
-                    if (day.substr(0, 1) === '0') day = day.substr(1, 1);
-                    return '${month} 月 ${day} 日';
-                }
+            //转换为带汉字的月日
+            formatDay (date) {
+                let month = date.substr(4, 2);
+                let day = date.substr(6, 2);
+                if (month.substr(0, 1) === '0') month = month.substr(1, 1);
+                if (day.substr(0, 1) === '0') day = day.substr(1, 1);
+                return '${month} 月 ${day} 日';
+            },
+            getRecommendList () {
+                //加载时设置为true, 加载完成后置为false
+                this.isLoading = true;
+                const prevDay = $.prevDay(this.dailyTime + 86400000);
+                $.ajax.get ('new/befor/' + prevDay) .then(res => {
+                    this.revommendList.push(res);
+                    this.isLoading = false;
+                })
             }
         },
         mounted () {
             //初始化时调用
             this.getThemes();
             this.getRecommendList();
+            //获取到DOM
+            const $list = this.$refs.list;
+            //监听中栏的滚动事件
+            $list.addEventListener('scroll', () => {
+                //在“主题日抱”或正在加载推荐列表时停止操作
+                if (this.type === 'daily' || this.isLoading) return;
+                //已经滚刀的距离假页面的高度等于整个内容区域高度时，视为解除底部
+                if ($list.scrollTop + document.body.clientHeight >= $list.scrollHeight) {
+                    //时间相对减少一天
+                    this.dailyTime -= 86400000;
+                    this.getRecommendList();
+                }
+            });
         }
     }
 </script>
